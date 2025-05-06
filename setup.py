@@ -1,8 +1,10 @@
-import os
+import os, shutil
 from setuptools import setup
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension, CppExtension
 from os.path import join
 
+USE_ROCM=os.getenv("USE_ROCM")
+USE_ROCM=True
 CPU_ONLY = False
 project_root = 'Correlation_Module'
 
@@ -27,6 +29,23 @@ def launch_setup():
     if CPU_ONLY:
         Extension = CppExtension
         macro = []
+    elif USE_ROCM:
+        from torch.utils.hipify import hipify_python
+        Extension = CppExtension
+        source_dir = os.path.dirname(os.path.realpath(__file__))
+        macro=[]
+        proj_dir = source_dir
+        out_dir = proj_dir
+        hipify_python.hipify(
+            project_directory=proj_dir,
+            output_directory=out_dir,
+            hip_clang_launch=True,
+            is_pytorch_extension=True
+        )
+        shutil.copyfile("./Correlation_Module/correlation.cpp", "./Correlation_Module/correlation.hip")
+        shutil.copyfile("./Correlation_Module/correlation_sampler_hip.cpp", "./Correlation_Module/correlation_sampler_hip.hip")
+        
+        source_files =['correlation.hip', 'correlation_sampler_hip.hip', 'correlation_hip_kernel.hip']
     else:
         Extension = CUDAExtension
         source_files.append('correlation_cuda_kernel.cu')
